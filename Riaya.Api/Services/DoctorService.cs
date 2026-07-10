@@ -79,6 +79,27 @@ public class DoctorService : IDoctorService
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<CurrentDoctorDto?> GetCurrentDoctorAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Doctors
+            .Include(d => d.ApplicationUser)
+            .Include(d => d.Specialization)
+            .Where(d => d.ApplicationUserId == userId)
+            .Select(d => new CurrentDoctorDto
+            {
+                DoctorId = d.Id,
+                UserId = d.ApplicationUserId!,
+                FullName = d.FullName,
+                Email = d.ApplicationUser != null && d.ApplicationUser.Email != null
+                    ? d.ApplicationUser.Email
+                    : string.Empty,
+                SpecializationId = d.SpecializationId,
+                SpecializationName = d.Specialization != null ? d.Specialization.Name : null,
+                IsActive = !d.IsDeleted
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<ServiceResult<DoctorDto>> CreateAsync(CreateDoctorDto dto, CancellationToken cancellationToken = default)
     {
         var validation = await ValidateDoctorAsync(dto, excludedDoctorId: null, cancellationToken);

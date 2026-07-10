@@ -10,6 +10,8 @@ namespace Riaya.Tests;
 
 public class ApiIntegrationTests
 {
+    private const string StrongPassword = "Admin@12345";
+
     [Fact]
     public async Task Root_ReturnsRunningMessage()
     {
@@ -58,6 +60,59 @@ public class ApiIntegrationTests
         var response = await client.GetAsync("/api/v1/appointments");
 
         response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task DoctorsMe_ReturnsCurrentDoctor_WhenUserIsAuthenticatedDoctor()
+    {
+        using var factory = new ClinicWebApplicationFactory(
+            ClinicTestFactory.DoctorUserId,
+            AppRoles.Doctor);
+        var seeded = await factory.SeedClinicAsync();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/doctors/me");
+
+        response.EnsureSuccessStatusCode();
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = json.RootElement.GetProperty("data");
+
+        Assert.True(json.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(seeded.Doctor.Id, data.GetProperty("doctorId").GetInt32());
+        Assert.Equal(ClinicTestFactory.DoctorUserId, data.GetProperty("userId").GetString());
+        Assert.Equal("Dr. Ahmed Ali", data.GetProperty("fullName").GetString());
+        Assert.Equal("doctor1@example.com", data.GetProperty("email").GetString());
+        Assert.Equal("Cardiology", data.GetProperty("specializationName").GetString());
+        Assert.True(data.GetProperty("isActive").GetBoolean());
+    }
+
+    [Fact]
+    public async Task DoctorsMe_ReturnsUnauthorized_WhenUserIsAnonymous()
+    {
+        using var factory = new ClinicWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/doctors/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DoctorsMe_ReturnsNotFound_WhenDoctorUserHasNoLinkedDoctorProfile()
+    {
+        const string userId = "doctor-without-profile";
+        using var factory = new ClinicWebApplicationFactory(userId, AppRoles.Doctor);
+        await factory.CreateUserAsync(
+            "doctor-without-profile@example.com",
+            StrongPassword,
+            AppRoles.Doctor,
+            "Dr. Missing Profile",
+            userId);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/doctors/me");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

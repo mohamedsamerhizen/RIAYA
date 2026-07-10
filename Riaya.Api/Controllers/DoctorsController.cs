@@ -5,6 +5,7 @@ using Riaya.Api.Extensions;
 using Riaya.Api.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Riaya.Api.Controllers;
 
@@ -26,6 +27,21 @@ public class DoctorsController : ControllerBase
     {
         var doctors = await _doctorService.GetAllAsync(queryParams);
         return Ok(ApiResponse<object>.SuccessResponse(doctors));
+    }
+
+    [HttpGet("me")]
+    [Authorize(Roles = AppRoles.Doctor)]
+    public async Task<IActionResult> GetCurrentDoctor()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(ApiResponse<string>.FailResponse("Authenticated user id claim is missing."));
+
+        var doctor = await _doctorService.GetCurrentDoctorAsync(userId);
+        if (doctor is null)
+            return NotFound(ApiResponse<string>.FailResponse("Doctor profile not found for the authenticated user."));
+
+        return Ok(ApiResponse<object>.SuccessResponse(doctor));
     }
 
     [HttpGet("{id}")]
